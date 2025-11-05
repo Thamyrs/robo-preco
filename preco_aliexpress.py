@@ -1,25 +1,33 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from selenium.common.exceptions import WebDriverException
 from dotenv import load_dotenv
 import smtplib
 import pandas as pd
 import time
 import os
 import re
+import requests
+
+def verificar_conexao(url):
+    """Verifica se há acesso à url antes de prosseguir."""
+    try:
+        requests.get(url, timeout=5)
+        return True
+    except requests.ConnectionError:
+        return False
 
 
-def iniciar_driver(headless=True):
+def iniciar_driver(headless=False):
     """Inicializa o Microsoft Edge WebDriver.
 
-    É necessário que o arquivo 'msedgedriver.exe' esteja na mesma pasta do projeto 
-    ou que o caminho completo seja informado nas opções do EdgeOptions.
+    É necessário que o arquivo 'msedgedriver.exe' seja da mesma versão que o navegador da sua máquina e esteja na mesma pasta do projeto ou que o caminho completo seja informado nas opções do EdgeOptions.
 
-    headless=True fará com que que o navegador seja executado em modo silencioso (sem interface gráfica) 
-    headless=False o navegador ficará visível durante a execução
+    headless=True -> fará com que que o navegador seja executado em modo silencioso (sem interface gráfica) 
+    headless=False -> o navegador ficará visível durante a execução
     """
     options = webdriver.EdgeOptions()
     if headless:
@@ -30,25 +38,34 @@ def iniciar_driver(headless=True):
 
 
 def obter_dados_produto(driver, url):
-    """Acessa a URL e extrai nome e preço do produto."""
+    """Acessa a URL e extrai nome e preço do produto.
+    
+    Retorna:
+        nome (str): nome do produto.
+        preco (float | None): preço convertido para float, ou None se não encontrado.
+    """
 
-    #TODO: validar erros de execução (como URL inválida e problemas de conectividade)
-
-    driver.get(url)
-    time.sleep(6)
+    try:
+        driver.get(url)
+        time.sleep(6)
+    except WebDriverException as e:
+        if "ERR_INTERNET_DISCONNECTED" in str(e):
+            raise ConnectionError("Sem conexão com a internet. Verifique sua rede e tente novamente.")
+        else:
+            raise
 
     try:
         nome = driver.find_element(By.XPATH, "//h1[@data-pl='product-title']").text
     except:
         nome = "Produto não encontrado"
 
-    """"""
     try:
         preco= driver.find_element(By.CLASS_NAME, "price-default--current--F8OlYIo").text
         preco_limpo = re.sub(r"[^\d,]", "", preco)  
         preco = float(preco_limpo.replace(",", "."))  
     except:
         preco = None
+
 
     return nome, preco
 
@@ -70,6 +87,7 @@ def registrar_preco_csv(nome, preco, url, arquivo_csv="historico_precos_aliexpre
 
     df.to_csv(arquivo_csv, index=False, encoding="utf-8-sig")
     print(f"Histórico atualizado em '{arquivo_csv}'")
+
 
 def enviar_alerta_email(nome_produto, preco_atual, preco_alvo, url_produto,
                         email_destino):
@@ -123,10 +141,15 @@ def enviar_alerta_email(nome_produto, preco_atual, preco_alvo, url_produto,
 
 #TODO: criar registro de logs da aplicação
 
-if __name__ == "__main__":
-    #TODO: remover URL e email hardcoded. 
-    url_produto = "https://pt.aliexpress.com/item/1005009310989008.html"
+def main():
+#TODO: remover URL e email hardcoded. 
+    url_produto = "https://pt.aliexpress.com/item/1005008632475317.html"
     email_destino="rilap53183@fantastu.com"
+
+    print("Verificando conexão com a internet...")
+    if not verificar_conexao(url_produto):
+        print("❌ Sem conexão com a internet. Abortando execução.")
+        return
 
     driver = iniciar_driver()
     nome, preco = obter_dados_produto(driver, url_produto)
@@ -137,3 +160,6 @@ if __name__ == "__main__":
 
     registrar_preco_csv(nome, preco, url_produto)
     enviar_alerta_email(nome, preco, 100.0, url_produto, email_destino)
+
+if __name__ == "__main__":
+    main()
