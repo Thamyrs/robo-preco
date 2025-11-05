@@ -2,9 +2,14 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from dotenv import load_dotenv
+import smtplib
 import pandas as pd
 import time
 import os
+import re
 
 
 def iniciar_driver(headless=True):
@@ -37,10 +42,13 @@ def obter_dados_produto(driver, url):
     except:
         nome = "Produto não encontrado"
 
+    """"""
     try:
-        preco = driver.find_element(By.CLASS_NAME, "price-default--current--F8OlYIo").text
+        preco= driver.find_element(By.CLASS_NAME, "price-default--current--F8OlYIo").text
+        preco_limpo = re.sub(r"[^\d,]", "", preco)  
+        preco = float(preco_limpo.replace(",", "."))  
     except:
-        preco = "Preço não encontrado"
+        preco = None
 
     return nome, preco
 
@@ -63,23 +71,69 @@ def registrar_preco_csv(nome, preco, url, arquivo_csv="historico_precos_aliexpre
     df.to_csv(arquivo_csv, index=False, encoding="utf-8-sig")
     print(f"Histórico atualizado em '{arquivo_csv}'")
 
+def enviar_alerta_email(nome_produto, preco_atual, preco_alvo, url_produto,
+                        email_destino):
+    """
+    Envia um alerta por e-mail quando o preço atual for igual ou menor que o preço alvo.
 
-def monitorar_produto(url):
-    """Executa o processo completo de monitoramento."""
+    Parâmetros:
+        nome_produto (str): Nome do produto monitorado.
+        preco_atual (float): Preço atual do produto.
+        preco_alvo (float): Preço desejado para o alerta.
+        url_produto (str): URL do produto.
+        email_destino (str): E-mail do destinatário que receberá o alerta.
+    """
+    load_dotenv()
+
+    #TODO: Configurar GitHub secrets e workflow do GitHub Actions.
+
+    email_origem = os.getenv("EMAIL_ORIGEM")
+    senha_email = os.getenv("SENHA_EMAIL")
+
+    if preco_atual <= preco_alvo:
+        assunto = f"Alerta de preço - {nome_produto}"
+        corpo = f"""
+        O preço do produto caiu! 🎉
+
+        🛍️ Produto: {nome_produto}
+        🎯 Preço mínimo desejado: R$ {preco_alvo}
+        💸 Preço atual: R$ {preco_atual}
+        
+        🔗 Link: {url_produto}
+
+        Atenciosamente,
+        Seu Bot de Monitoramento de Preços 🤖
+        """
+
+        msg = MIMEMultipart()
+        msg["From"] = email_origem
+        msg["To"] = email_destino
+        msg["Subject"] = assunto
+        msg.attach(MIMEText(corpo, "plain", "utf-8"))
+
+        try:
+            with smtplib.SMTP("smtp.gmail.com", 587) as servidor:
+                servidor.starttls()
+                servidor.login(email_origem, senha_email)
+                servidor.send_message(msg)
+
+            print(f"Alerta enviado com sucesso para {email_destino}!")
+        except Exception as e:
+            print(f"⚠️ Erro ao enviar e-mail: {e}")
+
+#TODO: criar registro de logs da aplicação
+
+if __name__ == "__main__":
+    #TODO: remover URL e email hardcoded. 
+    url_produto = "https://pt.aliexpress.com/item/1005009310989008.html"
+    email_destino="rilap53183@fantastu.com"
+
     driver = iniciar_driver()
-    nome, preco = obter_dados_produto(driver, url)
+    nome, preco = obter_dados_produto(driver, url_produto)
     driver.quit()
 
     print(f"Produto: {nome}")
     print(f"Preço atual: {preco}")
 
-    registrar_preco_csv(nome, preco, url)
-
-#TODO: criar função para alertar quando o preço cair.
-
-#TODO: criar registro de logs da aplicação
-
-if __name__ == "__main__":
-    #TODO: remover URL hardcoded. 
-    url_produto = "https://pt.aliexpress.com/item/1005008632475317.html"
-    monitorar_produto(url_produto)
+    registrar_preco_csv(nome, preco, url_produto)
+    enviar_alerta_email(nome, preco, 100.0, url_produto, email_destino)
