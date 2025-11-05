@@ -1,23 +1,46 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from selenium.common.exceptions import WebDriverException
 from dotenv import load_dotenv
+from urllib.parse import urlparse
 import smtplib
 import pandas as pd
 import time
 import os
 import re
-import requests
+import socket
 
-def verificar_conexao(url):
-    """Verifica se há acesso à url antes de prosseguir."""
+
+def verificar_conexao(host="8.8.8.8", port=53, timeout=3):
+    """Verifica se há conexão com a internet tentando se conectar ao DNS do Google (8.8.8.8).
+    Retorna True se a conexão for bem-sucedida.
+    """
     try:
-        requests.get(url, timeout=5)
+        socket.setdefaulttimeout(timeout)
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
         return True
-    except requests.ConnectionError:
+    except socket.error:
+        return False
+
+
+def valida_url(url):
+    """
+    Verifica se a URL é válida, pertence ao domínio do AliExpress e
+    representa uma página de produto (incluindo URLs encurtadas).
+    """
+    try:
+        resultado = urlparse(url)
+        if not all([resultado.scheme, resultado.netloc]):
+            return False
+        dominio = resultado.netloc.lower()
+        if not dominio.endswith("aliexpress.com"):
+            return False
+        padrao_item = re.search(r"/item/\d+\.html", resultado.path)
+        padrao_encurtado = dominio.startswith("a.aliexpress.com") and resultado.path.startswith("/_")
+        return bool(padrao_item or padrao_encurtado)
+    except Exception:
         return False
 
 
@@ -44,7 +67,6 @@ def obter_dados_produto(driver, url):
         nome (str): nome do produto.
         preco (float | None): preço convertido para float, ou None se não encontrado.
     """
-
     try:
         driver.get(url)
         time.sleep(6)
@@ -65,7 +87,6 @@ def obter_dados_produto(driver, url):
         preco = float(preco_limpo.replace(",", "."))  
     except:
         preco = None
-
 
     return nome, preco
 
@@ -147,10 +168,15 @@ def main():
     email_destino="rilap53183@fantastu.com"
 
     print("Verificando conexão com a internet...")
-    if not verificar_conexao(url_produto):
+    if not verificar_conexao():
         print("❌ Sem conexão com a internet. Abortando execução.")
         return
 
+    print("Validando formato da URL...")
+    if not valida_url(url_produto):
+        print("❌ URL com formato inválido. Pulando execução.")
+        return
+    
     driver = iniciar_driver()
     nome, preco = obter_dados_produto(driver, url_produto)
     driver.quit()
