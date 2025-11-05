@@ -12,7 +12,6 @@ import os
 import re
 import socket
 
-
 def verificar_conexao(host="8.8.8.8", port=53, timeout=3):
     """Verifica se há conexão com a internet tentando se conectar ao DNS do Google (8.8.8.8).
     Retorna True se a conexão for bem-sucedida.
@@ -27,8 +26,8 @@ def verificar_conexao(host="8.8.8.8", port=53, timeout=3):
 
 def valida_url(url):
     """
-    Verifica se a URL é válida, pertence ao domínio do AliExpress e
-    representa uma página de produto (incluindo URLs encurtadas).
+    Verifica se a URL é válida, pertence ao domínio do AliExpress e representa uma página de produto (incluindo URLs encurtadas).
+    Retorna True se a url passar por todos os 3 requisitos.
     """
     try:
         resultado = urlparse(url)
@@ -44,7 +43,7 @@ def valida_url(url):
         return False
 
 
-def iniciar_driver(headless=False):
+def iniciar_driver(headless=True):
     """Inicializa o Microsoft Edge WebDriver.
 
     É necessário que o arquivo 'msedgedriver.exe' seja da mesma versão que o navegador da sua máquina e esteja na mesma pasta do projeto ou que o caminho completo seja informado nas opções do EdgeOptions.
@@ -67,14 +66,8 @@ def obter_dados_produto(driver, url):
         nome (str): nome do produto.
         preco (float | None): preço convertido para float, ou None se não encontrado.
     """
-    try:
-        driver.get(url)
-        time.sleep(6)
-    except WebDriverException as e:
-        if "ERR_INTERNET_DISCONNECTED" in str(e):
-            raise ConnectionError("Sem conexão com a internet. Verifique sua rede e tente novamente.")
-        else:
-            raise
+    driver.get(url)
+    time.sleep(6)
 
     try:
         nome = driver.find_element(By.XPATH, "//h1[@data-pl='product-title']").text
@@ -86,7 +79,7 @@ def obter_dados_produto(driver, url):
         preco_limpo = re.sub(r"[^\d,]", "", preco)  
         preco = float(preco_limpo.replace(",", "."))  
     except:
-        preco = None
+        preco = -1
 
     return nome, preco
 
@@ -129,7 +122,7 @@ def enviar_alerta_email(nome_produto, preco_atual, preco_alvo, url_produto,
     email_origem = os.getenv("EMAIL_ORIGEM")
     senha_email = os.getenv("SENHA_EMAIL")
 
-    if preco_atual <= preco_alvo:
+    if preco_atual >= 0 and preco_atual <= preco_alvo:
         assunto = f"Alerta de preço - {nome_produto}"
         corpo = f"""
         O preço do produto caiu! 🎉
@@ -160,32 +153,92 @@ def enviar_alerta_email(nome_produto, preco_atual, preco_alvo, url_produto,
         except Exception as e:
             print(f"⚠️ Erro ao enviar e-mail: {e}")
 
+
+def coleta_informacoes_produto():
+    """
+    Coleta URLs de produtos do AliExpress e preços-alvo definidos pelo usuário.
+    Repete indefinidamente até o usuário digitar 'end'.
+    Retorna um dicionário no formato:
+    {
+        'url_produto_1': preco_alvo_1,
+        'url_produto_2': preco_alvo_2,
+        ...
+    }
+    """
+
+    produtos = {}
+
+    while True:
+        url_produto = input(
+            "\nDigite a URL do produto do AliExpress "
+            "(ou 'end' para encerrar):\n"
+        ).strip()
+
+        if url_produto.lower() == "end":
+            print("\nColeta encerrada.")
+            break
+
+        print("Validando formato da URL...")
+        if not valida_url(url_produto):
+            print("❌ URL com formato inválido ou não pertence ao AliExpress. Tente novamente.")
+            continue
+        else:
+            print("Ok.")
+
+        while True:
+            preco_str = input("Digite o preço mínimo desejado para alerta (ex: 89.99):\n").strip()
+
+            try:
+                preco_alvo = float(preco_str.replace(",", "."))
+                break
+            except ValueError:
+                print("Valor inválido! Digite apenas números e ponto decimal.")
+
+        produtos[url_produto] = preco_alvo
+        print(f"Produto adicionado: {url_produto} → Alerta para R${preco_alvo:.2f}")
+
+    return produtos
+
+def coleta_email_usuario():
+    """
+    Solicita e valida um endereço de e-mail.
+    Retorna o e-mail válido informado pelo usuário.
+    """
+
+    padrao_email = re.compile(
+        r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+    )
+
+    while True:
+        email = input("Digite o endereço de e-mail para receber alertas:\n").strip()
+
+        if not padrao_email.match(email):
+            print("❌ E-mail inválido! Tente novamente.")
+            continue
+        return email
+
+
 #TODO: criar registro de logs da aplicação
 
 def main():
-#TODO: remover URL e email hardcoded. 
-    url_produto = "https://pt.aliexpress.com/item/1005008632475317.html"
-    email_destino="rilap53183@fantastu.com"
+    email_destino = coleta_email_usuario()
+    produtos_monitorados = coleta_informacoes_produto()
 
     print("Verificando conexão com a internet...")
     if not verificar_conexao():
         print("❌ Sem conexão com a internet. Abortando execução.")
         return
 
-    print("Validando formato da URL...")
-    if not valida_url(url_produto):
-        print("❌ URL com formato inválido. Pulando execução.")
-        return
-    
     driver = iniciar_driver()
-    nome, preco = obter_dados_produto(driver, url_produto)
-    driver.quit()
 
-    print(f"Produto: {nome}")
-    print(f"Preço atual: {preco}")
-
-    registrar_preco_csv(nome, preco, url_produto)
-    enviar_alerta_email(nome, preco, 100.0, url_produto, email_destino)
-
+    for url_produto, preco_alvo in produtos_monitorados.items():
+        nome, preco = obter_dados_produto(driver, url_produto)
+        print(f"Produto: {nome}")
+        print(f"Preço atual: {preco}")
+        registrar_preco_csv(nome, preco, url_produto)
+        enviar_alerta_email(nome, preco, preco_alvo, url_produto, email_destino)
+        
+    driver.quit() 
+    
 if __name__ == "__main__":
     main()
