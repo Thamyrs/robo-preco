@@ -11,6 +11,16 @@ import time
 import os
 import re
 import socket
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,  
+    format="%(asctime)s [%(levelname)s] - %(message)s",
+    handlers=[
+        logging.FileHandler("robo_preco.log", encoding="utf-8"),  
+        logging.StreamHandler() 
+    ]
+)
 
 def verificar_conexao(host="8.8.8.8", port=53, timeout=3):
     """Verifica se há conexão com a internet tentando se conectar ao DNS do Google (8.8.8.8).
@@ -19,8 +29,10 @@ def verificar_conexao(host="8.8.8.8", port=53, timeout=3):
     try:
         socket.setdefaulttimeout(timeout)
         socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
+        logging.info("Conexão com a internet verificada com sucesso.")
         return True
-    except socket.error:
+    except socket.error as e:
+        logging.error(f"Sem conexão com a internet: {e}")
         return False
 
 
@@ -67,18 +79,27 @@ def obter_dados_produto(driver, url):
         preco (float | None): preço convertido para float, ou None se não encontrado.
     """
     driver.get(url)
-    time.sleep(6)
+    try:
+        driver.get(url)
+        time.sleep(6)
+        logging.info(f"Acessando página: {url}")
+    except Exception as e:
+        logging.error(f"Erro ao acessar {url}: {e}")
+        return "Erro de acesso", -1
+
 
     try:
         nome = driver.find_element(By.XPATH, "//h1[@data-pl='product-title']").text
-    except:
+    except Exception as e:
+        logging.warning(f"Não foi possível capturar o nome do produto: {e}")
         nome = "Produto não encontrado"
 
     try:
         preco= driver.find_element(By.CLASS_NAME, "price-default--current--F8OlYIo").text
         preco_limpo = re.sub(r"[^\d,]", "", preco)  
         preco = float(preco_limpo.replace(",", "."))  
-    except:
+    except Exception as e:
+        logging.warning(f"Erro ao capturar preço: {e}")
         preco = -1
 
     return nome, preco
@@ -123,6 +144,8 @@ def enviar_alerta_email(nome_produto, preco_atual, preco_alvo, url_produto,
     senha_email = os.getenv("SENHA_EMAIL")
 
     if preco_atual >= 0 and preco_atual <= preco_alvo:
+        logging.info(f"{nome_produto} está a R$ {preco_atual}, R$ {round(preco_alvo - preco_atual, 2)} a menos que o valor alvo!")
+        logging.info(f"Preparando o envio do alerta")
         assunto = f"Alerta de preço - {nome_produto}"
         corpo = f"""
         O preço do produto caiu! 🎉
@@ -148,10 +171,9 @@ def enviar_alerta_email(nome_produto, preco_atual, preco_alvo, url_produto,
                 servidor.starttls()
                 servidor.login(email_origem, senha_email)
                 servidor.send_message(msg)
-
-            print(f"Alerta enviado com sucesso para {email_destino}!")
+            logging.info(f"E-mail de alerta enviado para {email_destino} ({nome_produto})")
         except Exception as e:
-            print(f"⚠️ Erro ao enviar e-mail: {e}")
+            logging.error(f"Erro ao enviar e-mail: {e}")
 
 
 def coleta_informacoes_produto():
@@ -180,7 +202,7 @@ def coleta_informacoes_produto():
 
         print("Validando formato da URL...")
         if not valida_url(url_produto):
-            print("❌ URL com formato inválido ou não pertence ao AliExpress. Tente novamente.")
+            print("URL com formato inválido ou não pertence ao AliExpress. Tente novamente.")
             continue
         else:
             print("Ok.")
@@ -213,32 +235,36 @@ def coleta_email_usuario():
         email = input("Digite o endereço de e-mail para receber alertas:\n").strip()
 
         if not padrao_email.match(email):
-            print("❌ E-mail inválido! Tente novamente.")
+            print("Formato de e-mail inválido! Tente novamente.")
             continue
         return email
 
-
-#TODO: criar registro de logs da aplicação
-
 def main():
+    logging.info("Iniciando execução do robô de preços.")
+
     email_destino = coleta_email_usuario()
+
     produtos_monitorados = coleta_informacoes_produto()
+    logging.info(f"{len(produtos_monitorados)} produto(s) coletado(s).")
 
-    print("Verificando conexão com a internet...")
+
+    logging.info("Verificando conexão com a internet...")
     if not verificar_conexao():
-        print("❌ Sem conexão com a internet. Abortando execução.")
+        logging.error("Abortando execução: sem conexão com a internet.")
         return
-
+    
     driver = iniciar_driver()
+    logging.info("Driver iniciado.")
 
     for url_produto, preco_alvo in produtos_monitorados.items():
         nome, preco = obter_dados_produto(driver, url_produto)
-        print(f"Produto: {nome}")
-        print(f"Preço atual: {preco}")
+        logging.info(f"{nome}: preço atual R${preco}")
         registrar_preco_csv(nome, preco, url_produto)
         enviar_alerta_email(nome, preco, preco_alvo, url_produto, email_destino)
         
     driver.quit() 
+    logging.info("Execução finalizada com sucesso.")
+    
     
 if __name__ == "__main__":
     main()
