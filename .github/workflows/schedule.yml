@@ -7,7 +7,7 @@ on:
 
 jobs:
   monitor:
-    runs-on: windows-latest  # OU windows-latest se quiser usar Edge
+    runs-on: ubuntu-latest  
 
     steps:
       - name: Checkout
