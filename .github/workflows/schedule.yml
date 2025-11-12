@@ -2,12 +2,12 @@ name: Monitor de Preços
 
 on:
   schedule:
-    - cron: "0 */6 * * *"   # a cada 6 horas
-  workflow_dispatch:         # permite rodar manualmente
+    - cron: "0 */6 * * *"   
+  workflow_dispatch:       
 
 jobs:
   monitor:
-    runs-on: windows-latest  # OU windows-latest se quiser usar Edge
+    runs-on: windows-latest 
 
     steps:
       - name: Checkout
