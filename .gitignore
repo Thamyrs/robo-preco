@@ -1,4 +1,3 @@
 venv/
-historico_precos_aliexpress.csv
+logs/
 .env
-robo_preco.log

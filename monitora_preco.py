@@ -13,11 +13,13 @@ import socket
 import logging
 import json
 
+os.makedirs("logs", exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,  
     format="%(asctime)s [%(levelname)s] - %(message)s",
     handlers=[
-        logging.FileHandler("robo_preco.log", encoding="utf-8"),  
+        logging.FileHandler(".\\logs\\robo_preco.log", encoding="utf-8"),  
         logging.StreamHandler() 
     ]
 )
@@ -76,36 +78,40 @@ def obter_dados_produto(driver, url):
     
     Retorna:
         nome (str): nome do produto.
-        preco (float | None): preço convertido para float, ou None se não encontrado.
+        preco (float | None): preço convertido para float. Se o preço não for encontrado ou a URL for inválida, será retornado -1.
     """
-    driver.get(url)
-    try:
-        driver.get(url)
-        time.sleep(6)
-        logging.info(f"Acessando página: {url}")
-    except Exception as e:
-        logging.error(f"Erro ao acessar {url}: {e}")
-        return "Erro de acesso", -1
+    if(valida_url(url)):
+        try:
+            driver.get(url)
+            time.sleep(6)
+            logging.info(f"Acessando página: {url}")
+        except Exception as e:
+            logging.error(f"Erro ao acessar {url}: {e}")
+            return "Erro de acesso", -1
 
+        try:
+            nome = driver.find_element(By.XPATH, "//h1[@data-pl='product-title']").text
+        except Exception as e:
+            logging.warning(f"Não foi possível capturar o nome do produto: {e}")
+            nome = "Produto não encontrado"
 
-    try:
-        nome = driver.find_element(By.XPATH, "//h1[@data-pl='product-title']").text
-    except Exception as e:
-        logging.warning(f"Não foi possível capturar o nome do produto: {e}")
-        nome = "Produto não encontrado"
-
-    try:
-        preco= driver.find_element(By.CLASS_NAME, "price-default--current--F8OlYIo").text
-        preco_limpo = re.sub(r"[^\d,]", "", preco)  
-        preco = float(preco_limpo.replace(",", "."))  
-    except Exception as e:
-        logging.warning(f"Erro ao capturar preço: {e}")
+        try:
+            preco= driver.find_element(By.CLASS_NAME, "price-default--current--F8OlYIo").text
+            preco_limpo = re.sub(r"[^\d,]", "", preco)  
+            preco = float(preco_limpo.replace(",", "."))  
+        except Exception as e:
+            logging.warning(f"Erro ao capturar preço: {e}")
+            preco = -1
+        
+    else:
+        logging.warning(f"URL inválida ou fora do padrão de produto: {url}")
+        nome = "URL inválida"
         preco = -1
-
+    
     return nome, preco
 
 
-def registrar_preco_csv(nome, preco, url, arquivo_csv="historico_precos_aliexpress.csv"):
+def registrar_preco_csv(nome, preco, url, arquivo_csv=".\\logs\\historico_precos.csv"):
     """Registra o nome, preço e data no arquivo CSV."""
     novo_registro = pd.DataFrame([{
         "Produto": nome,
