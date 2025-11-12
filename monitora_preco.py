@@ -13,6 +13,9 @@ import socket
 import logging
 import json
 
+LOG_DIR = os.path.join(".", "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+
 def verificar_conexao(host="8.8.8.8", port=53, timeout=3):
     """Verifica se há conexão com a internet tentando se conectar ao DNS do Google (8.8.8.8).
     Retorna True se a conexão for bem-sucedida.
@@ -100,7 +103,7 @@ def obter_dados_produto(driver, url):
     return nome, preco
 
 
-def registrar_preco_csv(nome, preco, url, arquivo_csv=".\\logs\\historico_precos.csv"):
+def registrar_preco_csv(nome, preco, url, arquivo_csv=os.path.join(LOG_DIR, "historico_precos.csv")):
     """Registra o nome, preço e data no arquivo CSV."""
     novo_registro = pd.DataFrame([{
         "Produto": nome,
@@ -226,13 +229,11 @@ def main():
     
     
 if __name__ == "__main__":
-    os.makedirs("logs", exist_ok=True)
-
     logging.basicConfig(
         level=logging.INFO,  
         format="%(asctime)s [%(levelname)s] - %(message)s",
         handlers=[
-            logging.FileHandler(".\\logs\\robo_preco.log", encoding="utf-8"),  
+            logging.FileHandler(os.path.join(LOG_DIR, "robo_preco.log"), encoding="utf-8"),  
             logging.StreamHandler() 
         ]
     )
