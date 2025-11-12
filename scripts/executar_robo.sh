@@ -1,12 +1,11 @@
 #!/bin/bash
 
-PROJETO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJETO_DIR="$(dirname "$SCRIPT_DIR")"
 VENV_DIR="$PROJETO_DIR/venv"
 REQ_FILE="$PROJETO_DIR/requirements.txt"
-SCRIPT="$PROJETO_DIR/monitora_preco.py"
+SCRIPT="$PROJETO_DIR/main.py"
 LOG_DIR="$PROJETO_DIR/logs"
-
-mkdir -p "$LOG_DIR"
 
 LOG_FILE="$LOG_DIR/script_linux_$(date +'%Y-%m-%d_%H-%M-%S').log"
 

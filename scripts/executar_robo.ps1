@@ -1,7 +1,8 @@
-$PROJETO_DIR = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$SCRIPT_DIR  = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$PROJETO_DIR = Split-Path -Parent $SCRIPT_DIR
 $VENV_DIR    = Join-Path $PROJETO_DIR "venv"
 $REQ_FILE    = Join-Path $PROJETO_DIR "requirements.txt"
-$SCRIPT      = Join-Path $PROJETO_DIR "monitora_preco.py"
+$SCRIPT      = Join-Path $PROJETO_DIR "main.py"
 $LOG_DIR     = Join-Path $PROJETO_DIR "logs"
 
 if (-not (Test-Path $LOG_DIR)) {
