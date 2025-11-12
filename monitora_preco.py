@@ -13,17 +13,6 @@ import socket
 import logging
 import json
 
-os.makedirs("logs", exist_ok=True)
-
-logging.basicConfig(
-    level=logging.INFO,  
-    format="%(asctime)s [%(levelname)s] - %(message)s",
-    handlers=[
-        logging.FileHandler(".\\logs\\robo_preco.log", encoding="utf-8"),  
-        logging.StreamHandler() 
-    ]
-)
-
 def verificar_conexao(host="8.8.8.8", port=53, timeout=3):
     """Verifica se há conexão com a internet tentando se conectar ao DNS do Google (8.8.8.8).
     Retorna True se a conexão for bem-sucedida.
@@ -237,4 +226,18 @@ def main():
     
     
 if __name__ == "__main__":
-    main()
+    os.makedirs("logs", exist_ok=True)
+
+    logging.basicConfig(
+        level=logging.INFO,  
+        format="%(asctime)s [%(levelname)s] - %(message)s",
+        handlers=[
+            logging.FileHandler(".\\logs\\robo_preco.log", encoding="utf-8"),  
+            logging.StreamHandler() 
+        ]
+    )
+
+    try:
+        main()
+    except Exception as e:
+        logging.error(f"Erro fatal na execução: {e}")
