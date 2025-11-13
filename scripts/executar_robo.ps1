@@ -26,14 +26,14 @@ function Abort-Script($message) {
     exit 1
 }
 
-if (-not (Get-Command python3 -ErrorAction SilentlyContinue)) {
+if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
     Abort-Script "Python 3 nao encontrado! Instale o Python 3 e tente novamente."
 }
 
 if (-not (Test-Path $VENV_DIR)) {
     Write-Host "Criando ambiente virtual..."
     try {
-        python3 -m venv $VENV_DIR
+        python -m venv $VENV_DIR
     }
     catch {
         Abort-Script "Falha ao criar o ambiente virtual. Detalhes: $($_.Exception.Message)"
