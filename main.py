@@ -137,7 +137,7 @@ def obter_dados_produto(driver: webdriver.Edge, url_produto: str) -> tuple[str, 
         logging.error(f"Erro ao acessar {url_produto}: {e}")
         return "Erro de acesso", -1.0
 
-    wait = WebDriverWait(driver, 10) 
+    wait = WebDriverWait(driver, 30) 
 
     try:
         nome_elemento = wait.until(
