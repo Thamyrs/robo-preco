@@ -1,12 +1,14 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 from urllib.parse import urlparse
 import smtplib
 import pandas as pd
-import time
 import os
 import re
 import socket
@@ -124,34 +126,45 @@ def obter_dados_produto(driver: webdriver.Edge, url_produto: str) -> tuple[str, 
         tuple[str, float]: Nome do produto (str) e preço (float). 
         Caso o preço não seja encontrado ou a URL seja inválida, retorna ("<mensagem>", -1.0)
     """
-    if(valida_url(url_produto)):
-        try:
-            driver.get(url_produto)
-            time.sleep(6)
-            logging.info(f"Acessando página: {url_produto}")
-        except Exception as e:
-            logging.error(f"Erro ao acessar {url_produto}: {e}")
-            return "Erro de acesso", -1
-
-        try:
-            nome = driver.find_element(By.XPATH, "//h1[@data-pl='product-title']").text
-        except Exception as e:
-            logging.warning(f"Não foi possível capturar o nome do produto: {e}")
-            nome = "Produto não encontrado"
-
-        try:
-            preco= driver.find_element(By.CLASS_NAME, "price-default--current--F8OlYIo").text
-            preco_limpo = re.sub(r"[^\d,]", "", preco)  
-            preco = float(preco_limpo.replace(",", "."))  
-        except Exception as e:
-            logging.warning(f"Erro ao capturar preço: {e}")
-            preco = -1
-        
-    else:
+    if not valida_url(url_produto):
         logging.warning(f"URL inválida ou fora do padrão de produto: {url_produto}")
-        nome = "URL inválida"
-        preco = -1
-    
+        return "URL inválida", -1.0
+
+    try:
+        driver.get(url_produto)
+        logging.info(f"Acessando página: {url_produto}")
+    except Exception as e:
+        logging.error(f"Erro ao acessar {url_produto}: {e}")
+        return "Erro de acesso", -1.0
+
+    wait = WebDriverWait(driver, 10) 
+
+    try:
+        nome_elemento = wait.until(
+            EC.presence_of_element_located((By.XPATH, "//h1[@data-pl='product-title']"))
+        )
+        nome = nome_elemento.text.strip()
+    except TimeoutException:
+        logging.warning("Tempo limite excedido ao tentar localizar o nome do produto.")
+        nome = "Produto não encontrado"
+    except NoSuchElementException as e:
+        logging.warning(f"Elemento de nome não encontrado: {e}")
+        nome = "Produto não encontrado"
+
+    try:
+        preco_elemento = wait.until(
+            EC.presence_of_element_located((By.CLASS_NAME, "price-default--current--F8OlYIo"))
+        )
+        preco_raw = preco_elemento.text
+        preco_limpo = re.sub(r"[^\d,]", "", preco_raw)
+        preco = float(preco_limpo.replace(",", "."))
+    except TimeoutException:
+        logging.warning("Tempo limite excedido ao tentar localizar o preço do produto.")
+        preco = -1.0
+    except (NoSuchElementException, ValueError) as e:
+        logging.warning(f"Erro ao capturar ou converter preço: {e}")
+        preco = -1.0
+
     return nome, preco
 
 
